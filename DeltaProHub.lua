@@ -2234,7 +2234,7 @@ local function getPlayerNameList()
     return names
 end
 
-TeleportTab:CreateDropdown({
+PlayerTpDropdown = TeleportTab:CreateDropdown({
     Name = "Select Player",
     Options = getPlayerNameList(),
     CurrentOption = {},
@@ -2318,6 +2318,127 @@ table.insert(playerTpRefreshConns, Players.PlayerRemoving:Connect(function()
     task.wait(0.5)
     pcall(function() PlayerTpDropdown:Refresh(getPlayerNameList(), false) end)
 end))
+
+TeleportTab:CreateSection("Timed Teleport")
+
+local timedTeleportDelay = 5
+local timedTeleportTarget = "Selected Slot"
+local timedTeleportToken = 0
+
+local function resolveTimedTeleportPosition()
+    if timedTeleportTarget == "Selected Player" then
+        local name = getSelectedPlayerName()
+        if not name or name == "No other players" then
+            return nil, "Pick a player from the Player Teleport dropdown first."
+        end
+        local target = Players:FindFirstChild(name)
+        local targetHrp = target and target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+        if not targetHrp then
+            return nil, name .. " has no character right now."
+        end
+        return targetHrp.Position + Vector3.new(0, 3, 0), name
+    end
+    local slot = getCurrentSlot()
+    local pos = savedPositions[slot]
+    if not pos then
+        return nil, "Slot " .. tostring(slot) .. " is empty. Save a position first."
+    end
+    return pos, "Slot " .. tostring(slot)
+end
+
+TeleportTab:CreateDropdown({
+    Name = "Countdown",
+    Options = {"3 seconds", "5 seconds", "10 seconds"},
+    CurrentOption = {"5 seconds"},
+    MultipleOptions = false,
+    Flag = "TimedTeleportDelay",
+    Callback = function(Option)
+        local num = parseSlotOption(Option)
+        if num then
+            timedTeleportDelay = num
+        end
+    end,
+})
+
+TeleportTab:CreateDropdown({
+    Name = "Timed Teleport Target",
+    Options = {"Selected Slot", "Selected Player"},
+    CurrentOption = {"Selected Slot"},
+    MultipleOptions = false,
+    Flag = "TimedTeleportTarget",
+    Callback = function(Option)
+        if type(Option) == "table" then Option = Option[1] end
+        if type(Option) == "string" then
+            timedTeleportTarget = Option
+        end
+    end,
+})
+
+TeleportTab:CreateButton({
+    Name = "Start Timed Teleport",
+    Callback = function()
+        local checkPosition, checkMessage = resolveTimedTeleportPosition()
+        if not checkPosition then
+            Rayfield:Notify({
+                Title = "Timed Teleport",
+                Content = checkMessage,
+                Duration = 3,
+                Image = "alert-triangle",
+            })
+            return
+        end
+        timedTeleportToken = timedTeleportToken + 1
+        local token = timedTeleportToken
+        local delaySeconds = timedTeleportDelay
+        task.spawn(function()
+            for remaining = delaySeconds, 1, -1 do
+                if token ~= timedTeleportToken then return end
+                Rayfield:Notify({
+                    Title = "Teleporting in " .. tostring(remaining),
+                    Content = "Target: " .. timedTeleportTarget,
+                    Duration = 1,
+                    Image = "timer",
+                })
+                task.wait(1)
+            end
+            if token ~= timedTeleportToken then return end
+            local pos, label = resolveTimedTeleportPosition()
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if pos and hrp then
+                local rot = hrp.CFrame - hrp.CFrame.Position
+                hrp.CFrame = CFrame.new(pos) * rot
+                hrp.AssemblyLinearVelocity = Vector3.zero
+                Rayfield:Notify({
+                    Title = "Teleported",
+                    Content = "Teleported to " .. label,
+                    Duration = 3,
+                    Image = "check-circle",
+                })
+            else
+                Rayfield:Notify({
+                    Title = "Timed Teleport Failed",
+                    Content = hrp and label or "Character not found!",
+                    Duration = 3,
+                    Image = "x-circle",
+                })
+            end
+        end)
+    end,
+})
+
+TeleportTab:CreateButton({
+    Name = "Cancel Timed Teleport",
+    Callback = function()
+        timedTeleportToken = timedTeleportToken + 1
+        Rayfield:Notify({
+            Title = "Cancelled",
+            Content = "Timed teleport cancelled.",
+            Duration = 3,
+            Image = "x-circle",
+        })
+    end,
+})
 
 local function teleportToScreenPos(screenX, screenY)
     local char = LocalPlayer.Character
