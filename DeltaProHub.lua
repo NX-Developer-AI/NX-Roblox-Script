@@ -148,6 +148,15 @@ local savedSettings = {
 local walkSpeedCustomized = false
 local jumpPowerCustomized = false
 
+local function applyJumpValue(hum, value)
+    if not hum then return end
+    if hum.UseJumpPower then
+        pcall(function() hum.JumpPower = value end)
+    else
+        pcall(function() hum.JumpHeight = value * 0.15 end)
+    end
+end
+
 local savedPositions = {}
 local currentTeleportSlot = 1
 
@@ -302,8 +311,7 @@ LocalPlayer.CharacterAdded:Connect(function(char)
         hum.WalkSpeed = savedSettings.WalkSpeed
     end
     if jumpPowerCustomized then
-        hum.UseJumpPower = true
-        hum.JumpPower = savedSettings.JumpPower
+        applyJumpValue(hum, savedSettings.JumpPower)
     end
     if godModeEnabled then
         task.wait(0.1)
@@ -1297,16 +1305,12 @@ local function bindJumpPowerLock()
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
 
-    pcall(function() hum.UseJumpPower = true end)
-    if hum.JumpPower ~= savedSettings.JumpPower then
-        hum.JumpPower = savedSettings.JumpPower
-    end
+    applyJumpValue(hum, savedSettings.JumpPower)
 
-    jumpPowerLockConn = hum:GetPropertyChangedSignal("JumpPower"):Connect(function()
+    local prop = hum.UseJumpPower and "JumpPower" or "JumpHeight"
+    jumpPowerLockConn = hum:GetPropertyChangedSignal(prop):Connect(function()
         if not jumpPowerLockEnabled then return end
-        if hum.JumpPower ~= savedSettings.JumpPower then
-            hum.JumpPower = savedSettings.JumpPower
-        end
+        applyJumpValue(hum, savedSettings.JumpPower)
     end)
 end
 
@@ -1376,8 +1380,7 @@ MovementTab:CreateSlider({
         if Value ~= 50 then jumpPowerCustomized = true end
         local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
         if hum and jumpPowerCustomized then
-            hum.UseJumpPower = true
-            hum.JumpPower = Value
+            applyJumpValue(hum, Value)
         end
     end,
 })
